@@ -11,28 +11,99 @@ app = Flask(__name__)
 HTML_FORM = """
 <!doctype html>
 <title>NDR XML Validator</title>
-<h2>NDR XML File Validator</h2>
-<p><strong>Based on the Nigerian National Data Repository (NDR) validation rules – May 2025</strong></p>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 2rem;
+    background: #f9f9f9;
+  }
+  h2 {
+    color: #333;
+  }
+  button.toggle-rules {
+    background-color: #0052cc;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+  }
+  button.toggle-rules:hover {
+    background-color: #003d99;
+  }
+  #critical-rules {
+    display: none;
+    background: white;
+    border: 2px solid #0052cc;
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    max-width: 600px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+  }
+  #critical-rules ul {
+    margin-left: 1.2rem;
+  }
 
-<h3>Critical Rules</h3>
-<ul>
-  <li>Upload a <code>.xml</code> file (not zipped) that is well-formed and conforms to the NDR schema.</li>
-  <li>Every <code>HIVEncounter</code> requires <em>VisitDate</em> and <em>ARVDrugRegimen/Code</em>.</li>
-  <li><em>ARTStartDate</em> must not be later than any encounter date.</li>
-  <li>
-    <em>TBStatus</em> interpretation (per NDR):
-    <ul>
-      <li>0 = No signs/symptoms → IPT (INH) must be recorded on or after that date.</li>
-      <li>1 = Presumptive TB → No IPT expected (patient under investigation).</li>
-      <li>2 / 3 = Confirmed TB (Pulmonary / Extra-pulmonary) → TB treatment — IPT must NOT be given.</li>
-      <li>4 = On TB treatment → IPT must NOT be given.</li>
-    </ul>
-  </li>
-  <li>Each <code>LaboratoryReport</code> needs <em>LaboratoryTestIdentifier</em> and <em>CollectionDate</em>.</li>
-  <li>If <em>PrescribedRegimenDuration</em> &gt; 30 days, <em>MultiMonthDispensing</em> (MMD) is mandatory.</li>
-  <li>ARV codes in encounters must match the prescribed ART regimen for the same visit date.</li>
-  <li>Reported patient age must agree with <em>DateOfBirth</em> and <em>DateOfLastReport</em> (±1 year).</li>
-</ul>
+  form {
+    margin-bottom: 2rem;
+  }
+
+  /* Layout for patient bio and issues side by side */
+  .results-container {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+  }
+  .patient-bio, .validation-report {
+    background: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    flex: 1 1 300px;
+  }
+  .patient-bio ul, .validation-report ul {
+    list-style-type: disc;
+    margin-left: 1.2rem;
+  }
+  .validation-report p {
+    color: green;
+    font-weight: bold;
+  }
+  .error-message {
+    color: red;
+    font-weight: bold;
+  }
+</style>
+
+<h2>NDR XML File Validator (Upload individual xml file)</h2>
+
+<button class="toggle-rules" onclick="toggleRules()">Show Critical Rules</button>
+
+<div id="critical-rules">
+  <p><strong>Based on the Nigerian National Data Repository (NDR) validation rules – May 2025</strong></p>
+  <h3>Critical Rules</h3>
+  <ul>
+    <li>Upload a <code>.xml</code> file (not zipped) that is well-formed and conforms to the NDR schema.</li>
+    <li>Every <code>HIVEncounter</code> requires <em>VisitDate</em> and <em>ARVDrugRegimen/Code</em>.</li>
+    <li><em>ARTStartDate</em> must not be later than any encounter date.</li>
+    <li>
+      <em>TBStatus</em> interpretation (per NDR):
+      <ul>
+        <li>0 = No signs/symptoms → IPT (INH) must be recorded on or after that date.</li>
+        <li>1 = Presumptive TB → No IPT expected (patient under investigation).</li>
+        <li>2 / 3 = Confirmed TB (Pulmonary / Extra-pulmonary) → TB treatment — IPT must NOT be given.</li>
+        <li>4 = On TB treatment → IPT must NOT be given.</li>
+      </ul>
+    </li>
+    <li>Each <code>LaboratoryReport</code> needs <em>LaboratoryTestIdentifier</em> and <em>CollectionDate</em>.</li>
+    <li>If <em>PrescribedRegimenDuration</em> &gt; 30 days, <em>MultiMonthDispensing</em> (MMD) is mandatory.</li>
+    <li>ARV codes in encounters must match the prescribed ART regimen for the same visit date.</li>
+    <li>Reported patient age must agree with <em>DateOfBirth</em> and <em>DateOfLastReport</em> (±1 year).</li>
+  </ul>
+</div>
 
 <form method="post" enctype="multipart/form-data">
   <input type="file" name="file" accept=".xml" required>
@@ -40,42 +111,97 @@ HTML_FORM = """
 </form>
 
 {% if error_message %}
-  <p style="color:red;"><strong>{{ error_message }}</strong></p>
+  <p class="error-message">{{ error_message }}</p>
 {% endif %}
 
-{% if issues is not none %}
-  <h3>Validation Report</h3>
-  {% if issues %}
-    <ul>
-    {% for issue in issues %}
-      <li>{{ issue }}</li>
-    {% endfor %}
-    </ul>
-  {% else %}
-    <p style="color:green;"><strong>No blocking issues found – file passes core NDR checks.</strong></p>
-  {% endif %}
+{% if patient or issues is not none %}
+  <div class="results-container">
+    {% if patient %}
+    <div class="patient-bio">
+      <h3>Patient Bio</h3>
+      <ul>
+        <li><strong>Patient ID:</strong> {{ patient.id }}</li>
+        <li><strong>Hospital Number (HN):</strong> {{ patient.hn or "N/A" }}</li>
+        <li><strong>TB Identifier:</strong> {{ patient.tb_id or "N/A" }}</li>
+        <li><strong>Sex:</strong> {{ patient.sex }}</li>
+        <li><strong>Date of Birth:</strong> {{ patient.dob }}</li>
+        <li><strong>Reported Age:</strong> {{ patient.age }}</li>
+        <li><strong>Date of Last Report:</strong> {{ patient.report_date }}</li>
+        <li><strong>Facility Name:</strong> {{ patient.facility_name }}</li>
+        <li><strong>Facility ID:</strong> {{ patient.facility_id }}</li>
+        <li><strong>ART Start Date:</strong> {{ art_start }}</li>
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if issues is not none %}
+    <div class="validation-report">
+      <h3>Validation Report</h3>
+      {% if issues %}
+        <ul>
+        {% for issue in issues %}
+          <li>{{ issue }}</li>
+        {% endfor %}
+        </ul>
+      {% else %}
+        <p>No blocking issues found – file passes core NDR checks.</p>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
 {% endif %}
+
+<script>
+function toggleRules() {
+  const rules = document.getElementById('critical-rules');
+  const btn = document.querySelector('.toggle-rules');
+  if (rules.style.display === 'none' || rules.style.display === '') {
+    rules.style.display = 'block';
+    btn.textContent = 'Hide Critical Rules';
+  } else {
+    rules.style.display = 'none';
+    btn.textContent = 'Show Critical Rules';
+  }
+}
+</script>
+
 """
 
 # ---------------------------------------------------------------------------
-# Helper: extract all relevant pieces into a dictionary for easier validation
+# Extract patient and service data
 # ---------------------------------------------------------------------------
 def extract_services(xml_path: str) -> dict:
     tree = ET.parse(xml_path)
     root = tree.getroot()
 
     data = {
-        "encounters": {},      # {date: {"arv": code, "tb": tb_status}}
-        "regimens": {},        # {date: {...}}
-        "labs": {},            # {date: {...}}
-        "patient": {},         # dob, age, report_date
+        "encounters": {},
+        "regimens": {},
+        "labs": {},
+        "patient": {},
         "art_start": None
     }
 
-    # Patient demographics
     demo = root.find(".//PatientDemographics")
     if demo is not None:
-        data["patient"]["dob"] = demo.findtext("PatientDateOfBirth")
+        data["patient"] = {
+            "id": demo.findtext("PatientIdentifier"),
+            "dob": demo.findtext("PatientDateOfBirth"),
+            "sex": demo.findtext("PatientSexCode"),
+            "facility_name": demo.findtext(".//FacilityName"),
+            "facility_id": demo.findtext(".//FacilityID"),
+            "hn": None,
+            "tb_id": None
+        }
+
+        for identifier in demo.findall(".//OtherPatientIdentifiers/Identifier"):
+            id_type = identifier.findtext("IDTypeCode")
+            id_number = identifier.findtext("IDNumber")
+            if id_type == "HN":
+                data["patient"]["hn"] = id_number
+            elif id_type == "TB":
+                data["patient"]["tb_id"] = id_number
+
 
     common = root.find(".//CommonQuestions")
     if common is not None:
@@ -89,9 +215,8 @@ def extract_services(xml_path: str) -> dict:
             try:
                 data["art_start"] = datetime.strptime(art_start, "%Y-%m-%d")
             except ValueError:
-                pass  # leave None if malformed
+                pass
 
-    # Regimens
     for reg in root.findall(".//Regimen"):
         date = reg.findtext("VisitDate") or "Unknown"
         data["regimens"][date] = {
@@ -101,7 +226,6 @@ def extract_services(xml_path: str) -> dict:
             "mmd": reg.findtext("MultiMonthDispensing")
         }
 
-    # Encounters
     for enc in root.findall(".//HIVEncounter"):
         date = enc.findtext("VisitDate") or "Unknown"
         data["encounters"][date] = {
@@ -109,7 +233,6 @@ def extract_services(xml_path: str) -> dict:
             "tb": enc.findtext("TBStatus")
         }
 
-    # Labs
     for lab in root.findall(".//LaboratoryReport"):
         date = lab.findtext("VisitDate") or "Unknown"
         data["labs"][date] = {
@@ -120,29 +243,23 @@ def extract_services(xml_path: str) -> dict:
     return data
 
 # ---------------------------------------------------------------------------
-# Core validator
+# NDR Validator
 # ---------------------------------------------------------------------------
 def validate_ndr(data: dict) -> list:
     issues = []
-
-    # --- convenience collections -------------------------------------------
     ipt_dates = {
         d for d, r in data["regimens"].items()
         if "INH" in (r["code"] or "").upper()
     }
 
-    # --- encounter-level checks --------------------------------------------
     for date, enc in data["encounters"].items():
-
         if date == "Unknown":
             issues.append("❌ Encounter missing VisitDate.")
             continue
 
-        # ARV presence
         if not enc["arv"]:
             issues.append(f"❌ {date}: ARVDrugRegimen/Code is missing.")
 
-        # ART chronology
         art_start = data["art_start"]
         try:
             visit_dt = datetime.strptime(date, "%Y-%m-%d")
@@ -151,62 +268,48 @@ def validate_ndr(data: dict) -> list:
         except ValueError:
             issues.append(f"⚠️ {date}: VisitDate has invalid format.")
 
-        # TB/IPT logic
         tb = enc["tb"]
         if tb is None:
             issues.append(f"❌ {date}: TBStatus is missing.")
         else:
-            # convert dates to datetime for comparisons once
             try:
                 visit_dt = datetime.strptime(date, "%Y-%m-%d")
             except ValueError:
                 visit_dt = None
 
-            if tb == "0":           # No signs of TB → IPT required
+            if tb == "0":
                 has_ipt = any(
-                    datetime.strptime(d, "%Y-%m-%d") >= visit_dt
-                    if visit_dt else False
+                    datetime.strptime(d, "%Y-%m-%d") >= visit_dt if visit_dt else False
                     for d in ipt_dates
                 )
                 if not has_ipt:
                     issues.append(f"❌ {date}: TBStatus 0 but no IPT (INH) regimen on/after this date.")
             elif tb in {"2", "3", "4"}:
-                # IPT should NOT be given for confirmed/on-treatment TB
                 conflicting_ipt = any(
-                    datetime.strptime(d, "%Y-%m-%d") >= visit_dt
-                    if visit_dt else True
+                    datetime.strptime(d, "%Y-%m-%d") >= visit_dt if visit_dt else True
                     for d in ipt_dates
                 )
                 if conflicting_ipt:
-                    issues.append(f"❌ {date}: IPT recorded for a patient with TBStatus {tb} (should receive TB treatment, not IPT).")
+                    issues.append(f"❌ {date}: IPT recorded for TBStatus {tb} (should receive TB treatment).")
 
-    # --- regimen-level checks ----------------------------------------------
     for date, reg in data["regimens"].items():
-        # Duration vs MMD
         try:
             dur = int(reg["duration"] or 0)
             if dur > 30 and not reg["mmd"]:
-                issues.append(f"❌ {date}: Regimen duration >30 days but MultiMonthDispensing not specified.")
+                issues.append(f"❌ {date}: Regimen duration >30 days but MMD not specified.")
         except ValueError:
-            issues.append(f"⚠️ {date}: Regimen duration is not numeric.")
+            issues.append(f"⚠️ {date}: Regimen duration not numeric.")
 
-    # --- encounter vs regimen ARV match ------------------------------------
     for date, enc in data["encounters"].items():
         reg = data["regimens"].get(date)
         if reg and reg["type"] == "ART":
-            enc_arv = enc["arv"]
-            reg_arv = reg["code"]
-            if enc_arv and reg_arv and enc_arv != reg_arv:
-                issues.append(
-                    f"❌ {date}: ARV code mismatch (Encounter={enc_arv}, Regimen={reg_arv})."
-                )
+            if enc["arv"] and reg["code"] and enc["arv"] != reg["code"]:
+                issues.append(f"❌ {date}: ARV code mismatch (Encounter={enc['arv']}, Regimen={reg['code']}).")
 
-    # --- laboratory report completeness ------------------------------------
     for date, lab in data["labs"].items():
         if not lab["test_id"] or not lab["collected"]:
-            issues.append(f"❌ {date}: LaboratoryReport missing test identifier or collection date.")
+            issues.append(f"❌ {date}: Lab report missing test ID or collection date.")
 
-    # --- age vs DOB check ---------------------------------------------------
     dob = data["patient"].get("dob")
     age = data["patient"].get("age")
     rpt = data["patient"].get("report_date")
@@ -219,7 +322,7 @@ def validate_ndr(data: dict) -> list:
         if abs(int(age) - calc_age) > 1:
             issues.append(f"❌ Reported age ({age}) vs calculated ({calc_age}) differs by >1 year.")
     except Exception:
-        issues.append("⚠️ Unable to validate age (date format problem).")
+        issues.append("⚠️ Unable to validate age (date format issue).")
 
     return issues
 
@@ -230,6 +333,8 @@ def validate_ndr(data: dict) -> list:
 def upload_file():
     error_message = None
     issues = None
+    patient = None
+    art_start = None
 
     if request.method == "POST":
         f = request.files.get("file")
@@ -245,6 +350,10 @@ def upload_file():
             try:
                 data = extract_services(path)
                 issues = validate_ndr(data)
+                patient = data.get("patient")
+                art_start = data.get("art_start")
+                if art_start:
+                    art_start = art_start.date()
             except ParseError:
                 error_message = "❌ Uploaded file is not well-formed XML."
             except Exception as exc:
@@ -255,7 +364,9 @@ def upload_file():
 
     return render_template_string(HTML_FORM,
                                   error_message=error_message,
-                                  issues=issues)
+                                  issues=issues,
+                                  patient=patient,
+                                  art_start=art_start)
 
 if __name__ == "__main__":
     app.run(debug=True)
