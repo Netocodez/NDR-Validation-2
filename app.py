@@ -10,81 +10,246 @@ app = Flask(__name__)
 
 HTML_FORM = """
 <!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>NDR XML Validator</title>
 <style>
+  /* Reset & base */
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
   body {
-    font-family: Arial, sans-serif;
-    margin: 2rem;
-    background: #f9f9f9;
-  }
-  h2 {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f9f9f9;
+    margin: 0;
+    padding: 2rem 1rem;
     color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
   }
+
+  h1 {
+    font-weight: 700;
+    margin-bottom: 1rem;
+    text-align: center;
+    color: #222;
+  }
+
+  /* Critical rules toggle button */
   button.toggle-rules {
     background-color: #0052cc;
     color: white;
     border: none;
-    padding: 0.5rem 1rem;
+    padding: 0.6rem 1.2rem;
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: 5px;
+    font-weight: 600;
+    font-size: 1rem;
     margin-bottom: 1rem;
+    transition: background-color 0.3s ease;
   }
-  button.toggle-rules:hover {
+  button.toggle-rules:hover,
+  button.toggle-rules:focus {
     background-color: #003d99;
+    outline: none;
   }
+
+  /* Critical rules container */
   #critical-rules {
     display: none;
     background: white;
     border: 2px solid #0052cc;
     border-radius: 8px;
-    padding: 1rem 1.5rem;
-    max-width: 600px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    padding: 1.2rem 1.5rem;
+    max-width: 650px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
     margin-bottom: 2rem;
+    line-height: 1.5;
+  }
+  #critical-rules h2 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    color: #0052cc;
   }
   #critical-rules ul {
-    margin-left: 1.2rem;
+    padding-left: 1.2rem;
+  }
+  #critical-rules ul ul {
+    padding-left: 1.2rem;
+    list-style-type: circle;
   }
 
+  /* Form styling */
   form {
-    margin-bottom: 2rem;
+    background: white;
+    padding: 1.5rem 2rem;
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.1);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+    max-width: 650px;
+    width: 100%;
+    font-weight: 600;
   }
 
-  /* Layout for patient bio and issues side by side */
+  form input[type="file"] {
+    flex-grow: 1;
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0.4rem;
+  }
+
+  form button[type="submit"] {
+    padding: 12px 24px;
+    font-size: 1rem;
+    font-weight: 700;
+    background: linear-gradient(to right, #007BFF, #0056b3);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 123, 255, 0.3);
+    transition: background 0.3s ease, transform 0.2s ease;
+    white-space: nowrap;
+  }
+  form button[type="submit"]:hover,
+  form button[type="submit"]:focus {
+    background: linear-gradient(to right, #0056b3, #003d80);
+    transform: scale(1.05);
+    outline: none;
+  }
+
+  /* Messages */
+  .error-message {
+    color: #d93025;
+    font-weight: 700;
+    margin-top: 1rem;
+    text-align: center;
+    max-width: 650px;
+  }
+
+  /* Results container */
   .results-container {
     display: flex;
     gap: 2rem;
     flex-wrap: wrap;
     margin-top: 2rem;
+    max-width: 900px;
+    width: 100%;
+    justify-content: center;
   }
   .patient-bio, .validation-report {
     background: white;
-    padding: 1rem 1.5rem;
+    padding: 1.5rem 2rem;
     border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    flex: 1 1 300px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.1);
+    flex: 1 1 350px;
+    min-width: 280px;
   }
-  .patient-bio ul, .validation-report ul {
+  .patient-bio h3,
+  .validation-report h3 {
+    margin-top: 0;
+    color: #0052cc;
+    font-weight: 700;
+  }
+  .patient-bio ul,
+  .validation-report ul {
     list-style-type: disc;
-    margin-left: 1.2rem;
+    padding-left: 1.5rem;
+    line-height: 1.4;
   }
   .validation-report p {
-    color: green;
-    font-weight: bold;
+    color: #1a7f37;
+    font-weight: 700;
+    margin: 0.5rem 0 0 0;
   }
-  .error-message {
-    color: red;
-    font-weight: bold;
+
+  /* Responsive adjustments */
+  @media (max-width: 480px) {
+    form {
+      flex-direction: column;
+      gap: 0.8rem;
+      padding: 1rem 1.2rem;
+    }
+    form button[type="submit"] {
+      width: 100%;
+    }
+    .results-container {
+      flex-direction: column;
+      align-items: center;
+    }
   }
 </style>
+</head>
+<body>
 
-<h2>NDR XML File Validator (Upload individual xml file)</h2>
+<header>
+  <h1>NDR XML File Validator</h1>
+  <h3>Upload an individual <code>.xml</code> file conforming to the Nigerian National Data Repository (NDR) validation rules.<h3>
+</header>
 
-<button class="toggle-rules" onclick="toggleRules()">Show Critical Rules</button>
+<form method="post" enctype="multipart/form-data" novalidate>
+  <input type="file" name="file" accept=".xml" required aria-label="Upload XML file" />
+  <button type="submit">Validate</button>
+</form>
 
-<div id="critical-rules">
-  <p><strong>Based on the Nigerian National Data Repository (NDR) validation rules – May 2025</strong></p>
-  <h3>Critical Rules</h3>
+<!-- Placeholder for error message -->
+{% if error_message %}
+  <p class="error-message" role="alert">{{ error_message }}</p>
+{% endif %}
+
+<!-- Results Section -->
+{% if patient or issues is not none %}
+  <section class="results-container" aria-live="polite">
+    {% if patient %}
+    <article class="patient-bio" aria-label="Patient Bio Information">
+      <h3>Patient Bio</h3>
+      <ul>
+        <li><strong>Patient ID:</strong> {{ patient.id }}</li>
+        <li><strong>Hospital Number (HN):</strong> {{ patient.hn or "N/A" }}</li>
+        <li><strong>TB Identifier:</strong> {{ patient.tb_id or "N/A" }}</li>
+        <li><strong>Sex:</strong> {{ patient.sex }}</li>
+        <li><strong>Date of Birth:</strong> {{ patient.dob }}</li>
+        <li><strong>Reported Age:</strong> {{ patient.age }}</li>
+        <li><strong>Date of Last Report:</strong> {{ patient.report_date }}</li>
+        <li><strong>Facility Name:</strong> {{ patient.facility_name }}</li>
+        <li><strong>Facility ID:</strong> {{ patient.facility_id }}</li>
+        <li><strong>ART Start Date:</strong> {{ art_start }}</li>
+      </ul>
+    </article>
+    {% endif %}
+
+    {% if issues is not none %}
+    <article class="validation-report" aria-label="Validation Report">
+      <h3>Validation Report</h3>
+      {% if issues %}
+        <ul>
+          {% for issue in issues %}
+            <li>{{ issue }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>No blocking issues found – file passes core NDR checks.</p>
+      {% endif %}
+    </article>
+    {% endif %}
+  </section>
+{% endif %}
+
+<br>
+
+<button class="toggle-rules" aria-expanded="false" aria-controls="critical-rules" onclick="toggleRules()">Show Critical Rules</button>
+
+<section id="critical-rules" aria-live="polite" role="region" aria-label="Critical Validation Rules">
+  <h2>Critical Rules</h2>
   <ul>
     <li>Upload a <code>.xml</code> file (not zipped) that is well-formed and conforms to the NDR schema.</li>
     <li>Every <code>HIVEncounter</code> requires <em>VisitDate</em> and <em>ARVDrugRegimen/Code</em>.</li>
@@ -103,68 +268,30 @@ HTML_FORM = """
     <li>ARV codes in encounters must match the prescribed ART regimen for the same visit date.</li>
     <li>Reported patient age must agree with <em>DateOfBirth</em> and <em>DateOfLastReport</em> (±1 year).</li>
   </ul>
-</div>
-
-<form method="post" enctype="multipart/form-data">
-  <input type="file" name="file" accept=".xml" required>
-  <input type="submit" value="Validate">
-</form>
-
-{% if error_message %}
-  <p class="error-message">{{ error_message }}</p>
-{% endif %}
-
-{% if patient or issues is not none %}
-  <div class="results-container">
-    {% if patient %}
-    <div class="patient-bio">
-      <h3>Patient Bio</h3>
-      <ul>
-        <li><strong>Patient ID:</strong> {{ patient.id }}</li>
-        <li><strong>Hospital Number (HN):</strong> {{ patient.hn or "N/A" }}</li>
-        <li><strong>TB Identifier:</strong> {{ patient.tb_id or "N/A" }}</li>
-        <li><strong>Sex:</strong> {{ patient.sex }}</li>
-        <li><strong>Date of Birth:</strong> {{ patient.dob }}</li>
-        <li><strong>Reported Age:</strong> {{ patient.age }}</li>
-        <li><strong>Date of Last Report:</strong> {{ patient.report_date }}</li>
-        <li><strong>Facility Name:</strong> {{ patient.facility_name }}</li>
-        <li><strong>Facility ID:</strong> {{ patient.facility_id }}</li>
-        <li><strong>ART Start Date:</strong> {{ art_start }}</li>
-      </ul>
-    </div>
-    {% endif %}
-
-    {% if issues is not none %}
-    <div class="validation-report">
-      <h3>Validation Report</h3>
-      {% if issues %}
-        <ul>
-        {% for issue in issues %}
-          <li>{{ issue }}</li>
-        {% endfor %}
-        </ul>
-      {% else %}
-        <p>No blocking issues found – file passes core NDR checks.</p>
-      {% endif %}
-    </div>
-    {% endif %}
-  </div>
-{% endif %}
+</section>
 
 <script>
-function toggleRules() {
-  const rules = document.getElementById('critical-rules');
-  const btn = document.querySelector('.toggle-rules');
-  if (rules.style.display === 'none' || rules.style.display === '') {
+  function toggleRules() {
+    const rules = document.getElementById('critical-rules');
+    const btn = document.querySelector('.toggle-rules');
+    const isHidden = rules.style.display === 'none' || rules.style.display === '';
+    rules.style.display = isHidden ? 'block' : 'none';
+    btn.textContent = isHidden ? 'Hide Critical Rules' : 'Show Critical Rules';
+    btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+  }
+
+  // Show critical rules by default on page load
+  window.addEventListener('DOMContentLoaded', () => {
+    const rules = document.getElementById('critical-rules');
+    const btn = document.querySelector('.toggle-rules');
     rules.style.display = 'block';
     btn.textContent = 'Hide Critical Rules';
-  } else {
-    rules.style.display = 'none';
-    btn.textContent = 'Show Critical Rules';
-  }
-}
+    btn.setAttribute('aria-expanded', 'true');
+  });
 </script>
 
+</body>
+</html>
 """
 
 # ---------------------------------------------------------------------------
