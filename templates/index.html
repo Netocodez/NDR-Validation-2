@@ -182,7 +182,7 @@
 
 <header>
   <h1>NDR XML File Validator</h1>
-  <h3>Upload an individual <code>.xml</code> file conforming to the Nigerian National Data Repository (NDR) validation rules.<h3>
+  <h3>Upload individual <code>.xml</code> files conforming to the Nigerian National Data Repository (NDR) validation rules.<h3>
 </header>
 
 <form method="post" enctype="multipart/form-data" novalidate>
@@ -195,7 +195,11 @@
     <table border="1" cellpadding="5" cellspacing="0">
         <thead>
             <tr>
-                <th>Patient</th>
+                <th>Facility Name</th>
+                <th>Hospital Number</th>
+                <th>unique ID</th>
+                <th>Report Date</th>
+                <th>Other Patient's Info</th>
                 <th>ART Start Date</th>
                 <th>Validation Issues</th>
             </tr>
@@ -203,7 +207,23 @@
         <tbody>
             {% for result in results %}
                 <tr>
-                    <td>{{ result.patient }}</td>
+                    <td>{{ result.patient.facility_name or "[MISSING]" }}</td>
+                    <td>{{ result.patient.hn or "[MISSING]" }}</td>
+                    <td>{{ result.patient.id or "[MISSING]" }}</td>
+                    <td>{{ result.patient.report_date or "[MISSING]" }}</td>
+                    <td>
+                      DOB: {{ result.patient.dob or "[MISSING]" }}, 
+                      Sex: {{ result.patient.sex or "[MISSING]" }}, 
+                      Facility ID: {{ result.patient.facility_id or "[MISSING]" }}, 
+                      TB ID: {{ result.patient.tb_id or "[MISSING]" }}, 
+                      Age: {{ result.patient.age or "[MISSING]" }},  
+                      Address Code: {{ result.patient.addresscode or "[MISSING]" }}, 
+                      LGA Code: {{ result.patient.lgacode or "[MISSING]" }}, 
+                      State Code: {{ result.patient.statecode or "[MISSING]" }}, 
+                      Country Code: {{ result.patient.countrycode or "[MISSING]" }}, 
+                      Height at ART Start: {{ result.patient.height_at_art_start or "[MISSING]" }}
+                    </td>
+
                     <td>{{ result.art_start }}</td>
                     <td>
                         {% if result.issues %}
@@ -230,7 +250,7 @@
 <section id="critical-rules" aria-live="polite" role="region" aria-label="Critical Validation Rules">
   <h2>Critical Rules</h2>
   <ul>
-    <li>Upload a <code>.xml</code> file (not zipped) that is well-formed and conforms to the NDR schema.</li>
+    <li>Upload <code>.xml</code> files (not zipped) that is well-formed and conforms to the NDR schema.</li>
     <li>Every <code>HIVEncounter</code> requires <em>VisitDate</em> and <em>ARVDrugRegimen/Code</em>.</li>
     <li><em>ARTStartDate</em> must not be later than any encounter date.</li>
     <li>

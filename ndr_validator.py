@@ -16,8 +16,38 @@ def validate_ndr(data: dict) -> list:
         if "INH" in (r["code"] or "").upper()
     }
 
+    # Extract all invalid identifier messages from validation_flags
+    invalid_ids = [flag for flag in data["validation_flags"] if "Invalid identifier" in flag]
+
+    idtypeHN = data["patient"].get("hn")
+    idtypeTB = data["patient"].get("tb_id")
+
+    # Append all invalid ID messages
+    for invalid_msg in invalid_ids:
+        issues.append(f"❌ {invalid_msg}")
+
+    # If hn is missing, flag that explicitly and mention tb_id if any
+    if idtypeHN is None:
+        issues.append(f"❌ Missing valid Treatment Patient identifier (HN). Supplied TB ID: {idtypeTB}")
+
+
+        
     if "Missing ARTStartDate" in data["validation_flags"] or data.get("art_start") is None:
         issues.append("❌ ARTStartDate is missing in HIVQuestions section.")
+      
+        
+    # List of address-related messages to check
+    address_flags = [
+        "Missing AddressTypeCode in PatientAddress",
+        "Missing LGACode in PatientAddress",
+        "Missing StateCode in PatientAddress",
+        "Missing CountryCode in PatientAddress",
+        "Missing PatientAddress element"
+    ]
+    # Append any matching address messages to issues
+    for flag in address_flags:
+        if flag in data["validation_flags"]:
+            issues.append(f"❌ {flag}")
 
     for date, enc in data["encounters"].items():
         if date == "Unknown":
