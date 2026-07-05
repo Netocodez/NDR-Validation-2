@@ -1,42 +1,99 @@
+from datetime import datetime, timedelta
+
 from datetime import datetime
+
+def get_last_art_pickup(regimens):
+    latest = None
+
+    for visit_date, regimen_list in regimens.items():
+
+        try:
+            visit = datetime.strptime(visit_date, "%Y-%m-%d")
+        except ValueError:
+            continue
+
+        for reg in regimen_list:
+
+            if (reg.get("type") or "").strip().upper() != "ART":
+                continue
+
+            try:
+                duration = int(reg.get("duration") or 0)
+            except (TypeError, ValueError):
+                continue
+
+            if latest is None or visit > latest["pickup"]:
+                latest = {
+                    "pickup": visit,
+                    "duration": duration,
+                    "regimen": reg
+                }
+
+    return latest
 
 def validate_ndr(data: dict) -> list:
     data.setdefault("validation_flags", [])
     issues = []
-    
     seen_issues = set()
 
     def add_issue(msg):
         if msg not in seen_issues:
             issues.append(msg)
             seen_issues.add(msg)
-    
-    ipt_dates = {
-        d for d, r in data["regimens"].items()
-        if "INH" in (r["code"] or "").upper()
-    }
 
-    # Extract all invalid identifier messages from validation_flags
+    def is_expected_to_have_drug_pickup(encounter: dict, regimen: dict) -> bool:
+        return any([
+            encounter.get("who_stage"),
+            encounter.get("weight"),
+            encounter.get("cd4"),
+            encounter.get("functional_status"),
+            regimen and regimen.get("code")
+        ])
+
+    def is_drug_pickup_documented(encounter, regimen):
+        if regimen is None:
+            return False
+
+        return bool(
+            encounter.get("arv")
+            or regimen.get("code")
+            or regimen.get("duration")
+        )
+
+    ipt_dates = set()
+
+    for date, regimen_list in data.get("regimens", {}).items():
+
+        for reg in regimen_list:
+
+            if "INH" in (reg.get("code") or "").upper():
+                ipt_dates.add(date)
+
+    patient = data.get("patient", {})
+    encounters = data.get("encounters", {})
+    regimens = data.get("regimens", {})
+    labs = data.get("labs", {})
+    art_start = data.get("art_start")
+
+    if isinstance(art_start, str):
+        try:
+            art_start = datetime.strptime(art_start, "%Y-%m-%d")
+        except ValueError:
+            art_start = None
+
+    # Identifier checks
     invalid_ids = [flag for flag in data["validation_flags"] if "Invalid identifier" in flag]
+    for msg in invalid_ids:
+        add_issue(f"❌ {msg}")
 
-    idtypeHN = data["patient"].get("hn")
-    idtypeTB = data["patient"].get("tb_id")
+    if not patient.get("hn"):
+        add_issue(f"❌ Missing valid Treatment Patient identifier (HN). Supplied TB ID: {patient.get('tb_id')}")
 
-    # Append all invalid ID messages
-    for invalid_msg in invalid_ids:
-        issues.append(f"❌ {invalid_msg}")
+    # ART Start check
+    if "Missing ARTStartDate" in data["validation_flags"] or not art_start:
+        add_issue("❌ ARTStartDate is missing in HIVQuestions section.")
 
-    # If hn is missing, flag that explicitly and mention tb_id if any
-    if idtypeHN is None:
-        issues.append(f"❌ Missing valid Treatment Patient identifier (HN). Supplied TB ID: {idtypeTB}")
-
-
-        
-    if "Missing ARTStartDate" in data["validation_flags"] or data.get("art_start") is None:
-        issues.append("❌ ARTStartDate is missing in HIVQuestions section.")
-      
-        
-    # List of address-related messages to check
+    # Address fields
     address_flags = [
         "Missing AddressTypeCode in PatientAddress",
         "Missing LGACode in PatientAddress",
@@ -44,117 +101,174 @@ def validate_ndr(data: dict) -> list:
         "Missing CountryCode in PatientAddress",
         "Missing PatientAddress element"
     ]
-    # Append any matching address messages to issues
     for flag in address_flags:
         if flag in data["validation_flags"]:
-            issues.append(f"❌ {flag}")
+            add_issue(f"❌ {flag}")
 
-    for date, enc in data["encounters"].items():
-        if date == "Unknown":
-            issues.append("❌ Encounter missing VisitDate.")
-            continue
+    # Regimen duration and MMD checks
+    for date, regimen_list in regimens.items():
+        
+        for reg in regimen_list:
 
-        if not enc["arv"]:
-            issues.append(f"❌ {date}: ARVDrugRegimen/Code is missing.")
+            try:
+                dur = int(reg.get("duration") or 0)
+                codetext = reg.get("codetext", "")
+                regimen_type = reg.get("type", "")
 
-        art_start = data.get("art_start")
+                if not (1 <= dur <= 180):
+                    add_issue(
+                        f"❌ {date}: PrescribedRegimenDuration "
+                        f"{codetext} ({regimen_type}) is {dur}, "
+                        f"expected between 1 and 180 days."
+                    )
+
+                if regimen_type == "ART" and dur > 30 and not reg.get("mmd"):
+                    add_issue(
+                        f"❌ {date}: ART regimen duration >30 days but MMD not specified."
+                    )
+
+            except (TypeError, ValueError):
+                add_issue(f"⚠️ {date}: Regimen duration not numeric.")
+
+    # Encounters
+    last_refill_date = None
+    expected_run_out = None
+
+    for date in sorted(encounters):
+        enc = encounters[date]
+        regimen_list = regimens.get(date, [])
+
+        art_regimen = next(
+            (
+                r for r in regimen_list
+                if (r.get("type") or "").strip().upper() == "ART"
+            ),
+            None
+        )
         try:
             visit_dt = datetime.strptime(date, "%Y-%m-%d")
-            if art_start and visit_dt < art_start and enc.get("arv"):
-                issues.append(f"❌ {date}: Encounter precedes ARTStartDate ({art_start.date()}).")
-
-            if not art_start:
-                issues.append(f"❌ {date}: ARTStartDate Missing.")
         except ValueError:
-            issues.append(f"⚠️ {date}: VisitDate has invalid format.")
+            add_issue(f"⚠️ {date}: VisitDate has invalid format.")
+            continue
 
-        tb = enc["tb"]
-        if tb is None:
-            issues.append(f"❌ {date}: TBStatus is missing.")
-        else:
+        if is_expected_to_have_drug_pickup(enc, art_regimen) and not is_drug_pickup_documented(enc, art_regimen):
+            add_issue(f"❌ {date}: Drug pickup expected but not documented.")
+
+        # ARV runout logic
+        if art_regimen and art_regimen.get("duration"):
             try:
-                visit_dt = datetime.strptime(date, "%Y-%m-%d")
+                duration = int(art_regimen["duration"])
+                last_refill_date = visit_dt
+                expected_run_out = visit_dt + timedelta(days=duration)
+
             except ValueError:
-                visit_dt = None
+                add_issue(f"⚠️ {date}: ART regimen duration is not numeric.")
+        elif expected_run_out and visit_dt > expected_run_out and not enc.get("arv"):
+            add_issue(f"❌ {date}: Encounter after ARVs should have run out ({expected_run_out.date()}), but no refill documented.")
 
-            if tb == "0":
-                has_ipt = any(
-                    datetime.strptime(d, "%Y-%m-%d") >= visit_dt if visit_dt else False
-                    for d in ipt_dates
+        # ARV code mismatch
+        if art_regimen:
+            if (
+                enc.get("arv")
+                and art_regimen.get("code")
+                and enc["arv"] != art_regimen["code"]
+            ):
+                add_issue(
+                    f"❌ {date}: ARV code mismatch "
+                    f"(Encounter={enc['arv']}, Regimen={art_regimen['code']})."
                 )
-                if not has_ipt:
-                    issues.append(f"❌ {date}: TBStatus 0 but no IPT (INH) regimen on/after this date.")
-            elif tb in {"2", "3", "4"}:
-                conflicting_ipt = any(
-                    datetime.strptime(d, "%Y-%m-%d") >= visit_dt if visit_dt else True
-                    for d in ipt_dates
-                )
-                if conflicting_ipt:
-                    issues.append(f"❌ {date}: IPT recorded for TBStatus {tb} (should receive TB treatment).")
 
-        for date, reg in data["regimens"].items():
-            try:
-                dur = int(reg["duration"] or 0)
-                regcodetext = reg["codetext"] or ""
-                print(dur, date, regcodetext)
+        # Height check
+        try:
+            height = float(enc.get("height", 0))
+            if height > 200:
+                add_issue(f"❌ {date}: Child Height > 200 ({height}).")
+        except (TypeError, ValueError):
+            pass
 
-                # Check if duration is within 1–180
-                if not (1 <= dur <= 180):
-                    #issues.append(f"❌ {date}: PrescribedRegimenDuration {regcodetext} is {dur}, expected between 1 and 180 days.")
-                    add_issue(f"❌ {date}: PrescribedRegimenDuration {regcodetext} is {dur}, expected between 1 and 180 days.")
+    # Lab checks
+    for date, lab in labs.items():
+        if not lab.get("test_id") or not lab.get("collected"):
+            add_issue(f"❌ {date}: Lab report missing test ID or collection date.")
 
-                # Existing rule: duration >30 but no MMD
-                if dur > 30 and not reg["mmd"]:
-                    issues.append(f"❌ {date}: Regimen duration >30 days but MMD not specified.")
-            except ValueError:
-                issues.append(f"⚠️ {date}: Regimen duration not numeric.")
-
-
-    for date, enc in data["encounters"].items():
-        reg = data["regimens"].get(date)
-        if reg and reg["type"] == "ART":
-            if enc["arv"] and reg["code"] and enc["arv"] != reg["code"]:
-                issues.append(f"❌ {date}: ARV code mismatch (Encounter={enc['arv']}, Regimen={reg['code']}).")
-
-    for date, lab in data["labs"].items():
-        if not lab["test_id"] or not lab["collected"]:
-            issues.append(f"❌ {date}: Lab report missing test ID or collection date.")
-
-    dob = data["patient"].get("dob")
-    age = data["patient"].get("age")
-    rpt = data["patient"].get("report_date")
+    # Age validation
     try:
-        dob_dt = datetime.strptime(dob, "%Y-%m-%d")
-        rpt_dt = datetime.strptime(rpt, "%Y-%m-%d")
-        calc_age = rpt_dt.year - dob_dt.year - (
-            (rpt_dt.month, rpt_dt.day) < (dob_dt.month, dob_dt.day)
-        )
-        if abs(int(age) - calc_age) > 1:
-            issues.append(f"❌ Reported age ({age}) vs calculated ({calc_age}) differs by >1 year.")
+        dob_dt = datetime.strptime(patient["dob"], "%Y-%m-%d")
+        rpt_dt = datetime.strptime(patient["report_date"], "%Y-%m-%d")
+        calc_age = rpt_dt.year - dob_dt.year - ((rpt_dt.month, rpt_dt.day) < (dob_dt.month, dob_dt.day))
+        reported_age = int(patient.get("age", -1))
+        if abs(calc_age - reported_age) > 1:
+            add_issue(f"❌ Reported age ({reported_age}) vs calculated ({calc_age}) differs by >1 year.")
+        if calc_age < 0 or calc_age > 120:
+            add_issue(f"❌ Calculated age ({calc_age}) is out of valid human range.")
     except Exception:
-        issues.append("⚠️ Unable to validate age (date format issue).")
+        add_issue("⚠️ Unable to validate age (date format issue).")
 
-    # Validate height_at_art_start if available
-    height_at_art_start = data["patient"].get("height_at_art_start")
-    art_start = data.get("art_start")
-    if height_at_art_start:
-        try:
-            height_val = float(height_at_art_start)
-            if height_val > 200:
-                art_start_str = art_start.strftime("%Y-%m-%d") if art_start else "Unknown date"
-                issues.append(f"❌ ART Start ({art_start_str}): Child Height at ART start > 200 ({height_val}).")
-        except (TypeError, ValueError):
-            pass
+    # Height at ART start
+    try:
+        height_start = float(patient.get("height_at_art_start", 0))
+        age = int(patient.get("age", 0))
+        if age < 15 and height_start > 200:
+            date_str = art_start.strftime("%Y-%m-%d") if art_start else "Unknown date"
+            add_issue(f"❌ ART Start ({date_str}): Child Height at ART start > 200 ({height_start}).")
+    except (TypeError, ValueError):
+        pass
+    
+    # ==========================================================
+    # Active or Inactive ART Status Check
+    # ==========================================================
+    try:
+        today = datetime.today()
 
-    # Validate encounter heights
-    for date, enc in data["encounters"].items():
-        height = enc.get("height")
-        try:
-            height_val = float(height)
-            if height_val > 200:
-                issues.append(f"❌ {date}: Child Height > 200 ({height_val}).")
-        except (TypeError, ValueError):
-            pass
-        
+        last_pickup = get_last_art_pickup(regimens)
+
+        if last_pickup:
+
+            pickup = last_pickup["pickup"]
+            duration = last_pickup["duration"]
+            regimen = last_pickup["regimen"]
+
+            regimen_name = regimen.get("codetext", "Unknown Regimen")
+            regimen_code = regimen.get("code", "Unknown")
+
+            expected_refill = pickup + timedelta(days=duration)
+            inactive_date = expected_refill + timedelta(days=28)
+
+            if today > inactive_date:
+
+                overdue = (today - inactive_date).days
+
+                add_issue(
+                    f"❌ Patient is INACTIVE.\n"
+                    f"   • Last ART Refill Date : {pickup.date()}\n"
+                    f"   • ART Regimen          : {regimen_name} ({regimen_code})\n"
+                    f"   • Days Dispensed       : {duration} day(s)\n"
+                    f"   • Expected Refill Date : {expected_refill.date()}\n"
+                    f"   • Became Inactive On   : {inactive_date.date()}\n"
+                    f"   • Days Overdue         : {overdue}"
+                )
+
+            else:
+
+                days_remaining = (inactive_date - today).days
+
+                add_issue(
+                    f"✅ Patient is ACTIVE.\n"
+                    f"   • Last ART Refill Date : {pickup.date()}\n"
+                    f"   • ART Regimen          : {regimen_name} ({regimen_code})\n"
+                    f"   • Days Dispensed       : {duration} day(s)\n"
+                    f"   • Expected Refill Date : {expected_refill.date()}\n"
+                    f"   • Will Become Inactive : {inactive_date.date()}\n"
+                    f"   • Days Remaining       : {days_remaining}"
+                )
+
+        else:
+            add_issue(
+                "❌ Unable to determine ART status. "
+                "No ART regimen/pickup was found in the NDR."
+            )
+
+    except Exception as e:
+        add_issue(f"⚠️ Unable to determine ART refill status. ({e})")
 
     return issues

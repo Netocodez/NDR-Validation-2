@@ -88,16 +88,13 @@ def extract_services(xml_path: str) -> dict:
     # Extract regimens keyed by visit date
     for reg in root.findall(".//Regimen"):
         date = reg.findtext("VisitDate") or "Unknown"
-
-        data["regimens"].setdefault(date, []).append({
+        data["regimens"][date] = {
             "code": reg.findtext("PrescribedRegimen/Code") or "",
             "codetext": reg.findtext("PrescribedRegimen/CodeDescTxt") or "",
             "type": reg.findtext("PrescribedRegimenTypeCode"),
             "duration": reg.findtext("PrescribedRegimenDuration"),
-            "mmd": reg.findtext("MultiMonthDispensing"),
-            "dispensed_date": reg.findtext("PrescribedRegimenDispensedDate"),
-            "ended_date": reg.findtext("DateRegimenEnded")
-        })
+            "mmd": reg.findtext("MultiMonthDispensing")
+        }
 
     # Extract encounters keyed by visit date
     for enc in root.findall(".//HIVEncounter"):
