@@ -192,7 +192,14 @@
 
 {% if results %}
     <h2>Validation Results</h2>
-    <table border="1" cellpadding="5" cellspacing="0">
+    {% if results %}
+    <div style="margin:15px 0;">
+        <button type="button" onclick="exportTableToCSV()">
+            📥 Export Results to CSV
+        </button>
+    </div>
+    {% endif %}
+    <table id="resultsTable" border="1" cellpadding="5" cellspacing="0">
         <thead>
             <tr>
                 <th>Facility Name</th>
@@ -287,6 +294,88 @@
     btn.textContent = 'Hide Critical Rules';
     btn.setAttribute('aria-expanded', 'true');
   });
+
+  function exportTableToCSV() {
+
+      const table = document.getElementById("resultsTable");
+
+      if (!table) {
+          alert("No results to export.");
+          return;
+      }
+
+      let csv = [];
+
+      // Loop through every row
+      for (let row of table.rows) {
+
+          let cols = [];
+
+          for (let cell of row.cells) {
+
+              let text = "";
+
+              // Validation issues column contains <ul>
+              const list = cell.querySelectorAll("li");
+
+              if (list.length > 0) {
+
+                  text = Array.from(list)
+                      .map(li => li.innerText.replace(/\n/g, " "))
+                      .join(" | ");
+
+              } else {
+
+                  text = cell.innerText.replace(/\n/g, " ");
+
+              }
+
+              // Escape quotes
+              text = text.replace(/"/g, '""');
+
+              cols.push(`"${text}"`);
+          }
+
+          csv.push(cols.join(","));
+      }
+
+      const csvContent = csv.join("\n");
+
+      const BOM = "\uFEFF";
+
+      const blob = new Blob(
+          [BOM + csvContent],
+          {
+              type: "text/csv;charset=utf-8;"
+          }
+      );
+
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+
+      const today = new Date();
+
+      const filename =
+          "NDR_Validation_" +
+          today.getFullYear() +
+          "-" +
+          String(today.getMonth()+1).padStart(2,"0") +
+          "-" +
+          String(today.getDate()).padStart(2,"0") +
+          ".csv";
+
+      link.href = url;
+      link.download = filename;
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      document.body.removeChild(link);
+
+      URL.revokeObjectURL(url);
+  }
 </script>
 
 </body>
