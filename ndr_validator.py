@@ -1,7 +1,5 @@
 from datetime import datetime, timedelta
 
-from datetime import datetime
-
 def get_last_art_pickup(regimens):
     latest = None
 
@@ -41,25 +39,6 @@ def validate_ndr(data: dict) -> list:
             issues.append(msg)
             seen_issues.add(msg)
 
-    def is_expected_to_have_drug_pickup(encounter: dict, regimen: dict) -> bool:
-        return any([
-            encounter.get("who_stage"),
-            encounter.get("weight"),
-            encounter.get("cd4"),
-            encounter.get("functional_status"),
-            regimen and regimen.get("code")
-        ])
-
-    def is_drug_pickup_documented(encounter, regimen):
-        if regimen is None:
-            return False
-
-        return bool(
-            encounter.get("arv")
-            or regimen.get("code")
-            or regimen.get("duration")
-        )
-
     ipt_dates = set()
 
     for date, regimen_list in data.get("regimens", {}).items():
@@ -81,13 +60,21 @@ def validate_ndr(data: dict) -> list:
         except ValueError:
             art_start = None
 
-    # Identifier checks
-    invalid_ids = [flag for flag in data["validation_flags"] if "Invalid identifier" in flag]
-    for msg in invalid_ids:
-        add_issue(f"❌ {msg}")
+    # Patient identifier
+    if not patient.get("id"):
+        add_issue("❌ Missing PatientIdentifier.")
 
-    if not patient.get("hn"):
-        add_issue(f"❌ Missing valid Treatment Patient identifier (HN). Supplied TB ID: {patient.get('tb_id')}")
+    # Optional secondary identifiers
+    if not patient.get("hn") and not patient.get("tb_id"):
+        add_issue("⚠️ No secondary identifier (HN/TB) supplied.")
+
+    # Duplicate identifiers
+    if (
+        patient.get("hn")
+        and patient.get("tb_id")
+        and patient["hn"] == patient["tb_id"]
+    ):
+        add_issue("⚠️ HN and TB identifiers are identical. Verify patient identifiers.")
 
     # ART Start check
     if "Missing ARTStartDate" in data["validation_flags"] or not art_start:
@@ -105,36 +92,77 @@ def validate_ndr(data: dict) -> list:
         if flag in data["validation_flags"]:
             add_issue(f"❌ {flag}")
 
-    # Regimen duration and MMD checks
-    for date, regimen_list in regimens.items():
-        
-        for reg in regimen_list:
+    
 
+    # ==========================================================
+    # Regimen Validation
+    # ==========================================================
+    for date, regimen_list in regimens.items():
+
+        for reg in regimen_list:
+            
             try:
-                dur = int(reg.get("duration") or 0)
-                codetext = reg.get("codetext", "")
-                regimen_type = reg.get("type", "")
+                datetime.strptime(date, "%Y-%m-%d")
+            except ValueError:
+                add_issue(f"⚠️ {date}: Regimen VisitDate has invalid format.")
+                continue
+
+            reg_code = reg.get("code")
+            reg_type = reg.get("type")
+            duration = reg.get("duration")
+            mmd = reg.get("mmd")
+            codetext = reg.get("codetext", "")
+
+            # Required XML elements
+            if not reg_code:
+                add_issue(f"❌ {date}: Missing PrescribedRegimen Code.")
+
+            if not reg_type:
+                add_issue(f"❌ {date}: Missing PrescribedRegimenTypeCode.")
+
+            if duration in (None, "", "NULL"):
+                add_issue(
+                    f"❌ {date}: Missing PrescribedRegimenDuration. "
+                    "This will cause NDR XML validation to fail."
+                )
+                continue
+
+            # Duration validation
+            try:
+                dur = int(duration)
 
                 if not (1 <= dur <= 180):
                     add_issue(
                         f"❌ {date}: PrescribedRegimenDuration "
-                        f"{codetext} ({regimen_type}) is {dur}, "
-                        f"expected between 1 and 180 days."
-                    )
-
-                if regimen_type == "ART" and dur > 30 and not reg.get("mmd"):
-                    add_issue(
-                        f"❌ {date}: ART regimen duration >30 days but MMD not specified."
+                        f"{codetext} ({reg_type}) is {dur}, "
+                        "expected between 1 and 180 days."
                     )
 
             except (TypeError, ValueError):
-                add_issue(f"⚠️ {date}: Regimen duration not numeric.")
+                add_issue(
+                    f"⚠️ {date}: PrescribedRegimenDuration is not numeric."
+                )
+                continue
 
-    # Encounters
+            # MMD validation
+            if (
+                (reg_type or "").strip().upper() == "ART"
+                and dur > 30
+                and not mmd
+            ):
+                add_issue(
+                    f"❌ {date}: ART regimen duration >30 days but MultiMonthDispensing is missing."
+                )
+            
+            
+    # ==========================================================
+    # Encounter Validation
+    # ==========================================================
     last_refill_date = None
     expected_run_out = None
 
     for date in sorted(encounters):
+
         enc = encounters[date]
         regimen_list = regimens.get(date, [])
 
@@ -145,32 +173,42 @@ def validate_ndr(data: dict) -> list:
             ),
             None
         )
+
         try:
             visit_dt = datetime.strptime(date, "%Y-%m-%d")
         except ValueError:
             add_issue(f"⚠️ {date}: VisitDate has invalid format.")
             continue
 
-        if is_expected_to_have_drug_pickup(enc, art_regimen) and not is_drug_pickup_documented(enc, art_regimen):
-            add_issue(f"❌ {date}: Drug pickup expected but not documented.")
-
-        # ARV runout logic
+        # ARV run-out logic
         if art_regimen and art_regimen.get("duration"):
             try:
                 duration = int(art_regimen["duration"])
                 last_refill_date = visit_dt
                 expected_run_out = visit_dt + timedelta(days=duration)
 
-            except ValueError:
+            except (TypeError, ValueError):
                 add_issue(f"⚠️ {date}: ART regimen duration is not numeric.")
-        elif expected_run_out and visit_dt > expected_run_out and not enc.get("arv"):
-            add_issue(f"❌ {date}: Encounter after ARVs should have run out ({expected_run_out.date()}), but no refill documented.")
 
-        # ARV code mismatch
+        elif expected_run_out and visit_dt > expected_run_out:
+            if not enc.get("arv"):
+                add_issue(
+                    f"❌ {date}: Encounter after ARVs should have run out "
+                    f"({expected_run_out.date()}), but no refill documented."
+                )
+
+        # Encounter vs Regimen validation
         if art_regimen:
-            if (
-                enc.get("arv")
-                and art_regimen.get("code")
+
+            # ART regimen exists but Encounter ARV code is missing
+            if not enc.get("arv"):
+                add_issue(
+                    f"❌ {date}: ART regimen exists but HIVEncounter is missing ARVDrugRegimen/Code."
+                )
+
+            # ART regimen exists but codes do not match
+            elif (
+                art_regimen.get("code")
                 and enc["arv"] != art_regimen["code"]
             ):
                 add_issue(
@@ -178,18 +216,29 @@ def validate_ndr(data: dict) -> list:
                     f"(Encounter={enc['arv']}, Regimen={art_regimen['code']})."
                 )
 
-        # Height check
+        # Height validation
         try:
             height = float(enc.get("height", 0))
             if height > 200:
                 add_issue(f"❌ {date}: Child Height > 200 ({height}).")
         except (TypeError, ValueError):
             pass
+    
+    
+    # ==========================================================
+    # Laboratory Report Validation (Warning Only)
+    # ==========================================================
+    """for date, lab in labs.items():
 
-    # Lab checks
-    for date, lab in labs.items():
-        if not lab.get("test_id") or not lab.get("collected"):
-            add_issue(f"❌ {date}: Lab report missing test ID or collection date.")
+        if lab.get("test_id") and not lab.get("collected"):
+            add_issue(
+                f"⚠️ {date}: LaboratoryTestIdentifier exists but CollectionDate is missing."
+            )
+
+        elif lab.get("collected") and not lab.get("test_id"):
+            add_issue(
+                f"⚠️ {date}: CollectionDate exists but LaboratoryTestIdentifier is missing."
+            )"""
 
     # Age validation
     try:
