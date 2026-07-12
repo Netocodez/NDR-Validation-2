@@ -1,10 +1,14 @@
 import xml.etree.ElementTree as ET
 from datetime import datetime
 
-def extract_services(xml_path: str) -> dict:
-    """Parse NDR XML file and extract patient, encounters, regimens, labs, and flags."""
-    
-    tree = ET.parse(xml_path)
+def extract_services(xml_source) -> dict:
+    """
+    xml_source can be:
+      - a file path
+      - a file-like object
+      - BytesIO
+    """
+    tree = ET.parse(xml_source)
     root = tree.getroot()
 
     data = {

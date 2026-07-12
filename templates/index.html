@@ -5,276 +5,543 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>NDR XML Validator</title>
 <style>
-  /* Reset & base */
+  /* Modern CSS Variable Tokens */
+  :root {
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --primary-light: #eff6ff;
+    --success: #10b981;
+    --success-light: #f0fdf4;
+    --success-border: #bbf7d0;
+    --danger: #ef4444;
+    --danger-light: #fef2f2;
+    --warning: #f59e0b;
+    --text-main: #0f172a;
+    --text-muted: #475569;
+    --bg-main: #f8fafc;
+    --card-bg: #ffffff;
+    --border: #e2e8f0;
+    --radius: 8px;
+    --transition: all 0.2s ease-in-out;
+  }
+
+  /* Reset & Base Styles */
   *, *::before, *::after {
     box-sizing: border-box;
   }
 
   body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f9f9f9;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-main);
     margin: 0;
-    padding: 2rem 1rem;
-    color: #333;
+    padding: 2rem 1.5rem;
+    color: var(--text-main);
+    line-height: 1.4;
     display: flex;
     flex-direction: column;
     align-items: center;
     min-height: 100vh;
   }
 
-  h1 {
-    font-weight: 700;
-    margin-bottom: 1rem;
-    text-align: center;
-    color: #222;
-  }
-
-  /* Critical rules toggle button */
-  button.toggle-rules {
-    background-color: #0052cc;
-    color: white;
-    border: none;
-    padding: 0.6rem 1.2rem;
-    cursor: pointer;
-    border-radius: 5px;
-    font-weight: 600;
-    font-size: 1rem;
-    margin-bottom: 1rem;
-    transition: background-color 0.3s ease;
-  }
-  button.toggle-rules:hover,
-  button.toggle-rules:focus {
-    background-color: #003d99;
-    outline: none;
-  }
-
-  /* Critical rules container */
-  #critical-rules {
-    display: none;
-    background: white;
-    border: 2px solid #0052cc;
-    border-radius: 8px;
-    padding: 1.2rem 1.5rem;
-    max-width: 650px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-    margin-bottom: 2rem;
-    line-height: 1.5;
-  }
-  #critical-rules h2 {
-    margin-top: 0;
-    margin-bottom: 0.5rem;
-    color: #0052cc;
-  }
-  #critical-rules ul {
-    padding-left: 1.2rem;
-  }
-  #critical-rules ul ul {
-    padding-left: 1.2rem;
-    list-style-type: circle;
-  }
-
-  /* Form styling */
-  form {
-    background: white;
-    padding: 1.5rem 2rem;
-    border-radius: 10px;
-    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.1);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    align-items: center;
-    justify-content: center;
-    max-width: 650px;
+  /* Layout Container */
+  .container {
     width: 100%;
-    font-weight: 600;
+    max-width: 1400px;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
   }
 
-  form input[type="file"] {
-    flex-grow: 1;
+  header {
+    text-align: center;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  header h1 {
+    font-size: 2.25rem;
+    font-weight: 800;
+    color: var(--text-main);
+    margin: 0 0 0.5rem 0;
+    letter-spacing: -0.025em;
+  }
+
+  header h3 {
+    font-size: 1.05rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin: 0;
+  }
+
+  /* Card Styling */
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 2rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  }
+
+  /* Modern Drag-and-Drop Form Styling */
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .file-dropzone {
+    position: relative;
+    border: 2px dashed #cbd5e1;
+    border-radius: var(--radius);
+    padding: 3rem 2rem;
+    text-align: center;
+    background-color: #fafafa;
+    transition: var(--transition);
     cursor: pointer;
-    font-size: 1rem;
-    padding: 0.4rem;
+  }
+
+  .file-dropzone:hover {
+    border-color: var(--primary);
+    background-color: var(--primary-light);
+  }
+
+  .file-dropzone input[type="file"] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .dropzone-text {
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .dropzone-text strong {
+    color: var(--primary);
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
   }
 
   form button[type="submit"] {
-    padding: 12px 24px;
+    padding: 0.75rem 2rem;
     font-size: 1rem;
-    font-weight: 700;
-    background: linear-gradient(to right, #007BFF, #0056b3);
+    font-weight: 600;
+    background: var(--primary);
     color: white;
     border: none;
     border-radius: 6px;
     cursor: pointer;
-    box-shadow: 0 2px 10px rgba(0, 123, 255, 0.3);
-    transition: background 0.3s ease, transform 0.2s ease;
-    white-space: nowrap;
+    transition: var(--transition);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   }
+
   form button[type="submit"]:hover,
   form button[type="submit"]:focus {
-    background: linear-gradient(to right, #0056b3, #003d80);
-    transform: scale(1.05);
-    outline: none;
+    background: var(--primary-hover);
+    outline: 2px solid var(--primary-light);
+  }
+
+  /* Badges & Indicators */
+  .processed-badge {
+    background-color: var(--primary-light);
+    color: var(--primary);
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .badge-missing {
+    background-color: var(--danger-light);
+    color: var(--danger);
+    padding: 0.125rem 0.37rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .badge-none {
+    background-color: var(--bg-main);
+    color: var(--text-muted);
+    padding: 0.125rem 0.37rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  /* Control Row Components */
+  .action-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .btn-secondary {
+    background-color: #ffffff;
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: var(--transition);
+  }
+
+  .btn-secondary:hover {
+    background-color: var(--bg-main);
+    border-color: #cbd5e1;
+  }
+
+  /* Critical Rules Layout */
+  button.toggle-rules {
+    background-color: var(--bg-main);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    transition: var(--transition);
+    align-self: center;
+  }
+  button.toggle-rules:hover {
+    background-color: #f1f5f9;
+    color: var(--text-main);
+  }
+
+  #critical-rules {
+    display: none;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--primary);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    width: 100%;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  }
+  #critical-rules h2 {
+    margin-top: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: var(--text-main);
+  }
+  #critical-rules ul {
+    padding-left: 1.25rem;
+    margin: 0;
+  }
+  #critical-rules li {
+    margin-bottom: 0.5rem;
+    color: var(--text-muted);
+  }
+  #critical-rules ul ul {
+    margin-top: 0.5rem;
+    list-style-type: circle;
   }
 
   /* Messages */
   .error-message {
-    color: #d93025;
-    font-weight: 700;
-    margin-top: 1rem;
+    background-color: var(--danger-light);
+    border: 1px solid #fee2e2;
+    color: var(--danger);
+    padding: 1rem;
+    border-radius: var(--radius);
+    font-weight: 600;
     text-align: center;
-    max-width: 650px;
-  }
-
-  /* Results container */
-  .results-container {
-    display: flex;
-    gap: 2rem;
-    flex-wrap: wrap;
-    margin-top: 2rem;
-    max-width: 900px;
     width: 100%;
-    justify-content: center;
-  }
-  .patient-bio, .validation-report {
-    background: white;
-    padding: 1.5rem 2rem;
-    border-radius: 8px;
-    box-shadow: 0 3px 12px rgba(0,0,0,0.1);
-    flex: 1 1 350px;
-    min-width: 280px;
-  }
-  .patient-bio h3,
-  .validation-report h3 {
-    margin-top: 0;
-    color: #0052cc;
-    font-weight: 700;
-  }
-  .patient-bio ul,
-  .validation-report ul {
-    list-style-type: disc;
-    padding-left: 1.5rem;
-    line-height: 1.4;
-  }
-  .validation-report p {
-    color: #1a7f37;
-    font-weight: 700;
-    margin: 0.5rem 0 0 0;
   }
 
-  /* Responsive adjustments */
-  @media (max-width: 480px) {
-    form {
+  /* Enhanced Table & Grid Styling */
+  .table-responsive {
+    width: 100%;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    max-height: 75vh; /* Enables container view freezing behavior */
+  }
+
+  table {
+    width: 100%;
+    border-collapse: separate; /* Required for uniform sticky borders */
+    border-spacing: 0;
+    background: var(--card-bg);
+    font-size: 0.85rem;
+    text-align: left;
+  }
+
+  th, td {
+    padding: 0.75rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  th {
+    background-color: var(--bg-main);
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.725rem;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: inset 0 -1px 0 var(--border); /* Persists bottom line look while pinned */
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
+  tr:hover td {
+    background-color: #fafafa;
+  }
+
+  /* Simplified Natural Text Metric Layout */
+  .patient-matrix-simple {
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: var(--text-muted);
+    word-break: break-word;
+    max-width: 450px;
+  }
+
+  .matrix-tag {
+    font-weight: 700;
+    color: #475569;
+  }
+
+  /* Validation Issues list layout resets */
+  .issue-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 320px;
+  }
+
+  .issue-list {
+    margin: 0;
+    padding-left: 1.1rem;
+    color: var(--danger);
+  }
+  
+  .issue-list li {
+    margin-bottom: 0.25rem;
+  }
+
+  .status-clean {
+    color: var(--success);
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  /* Specialized Professional Clinical Status Cards */
+  .clinical-card {
+    padding: 0.6rem 0.85rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    border: 1px solid var(--border);
+  }
+
+  .clinical-card.active-status {
+    background-color: var(--success-light);
+    border-color: var(--success-border);
+    color: #166534;
+  }
+
+  .clinical-card.inactive-status {
+    background-color: #fcfcfd;
+    border-color: #cbd5e1;
+    color: #334155;
+  }
+
+  .clinical-card-title {
+    font-weight: 700;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.35rem;
+    border-bottom: 1px dashed rgba(0,0,0,0.08);
+    padding-bottom: 0.2rem;
+  }
+
+  .clinical-card-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.25rem 0.5rem;
+  }
+
+  .clinical-card-appendices {
+    margin-top: 0.4rem;
+    padding-top: 0.3rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.04);
+    font-size: 0.775rem;
+    font-style: italic;
+    opacity: 0.9;
+    line-height: 1.3;
+  }
+
+  /* Responsive Adjustments */
+  @media (max-width: 768px) {
+    .action-row {
       flex-direction: column;
-      gap: 0.8rem;
-      padding: 1rem 1.2rem;
-    }
-    form button[type="submit"] {
-      width: 100%;
-    }
-    .results-container {
-      flex-direction: column;
-      align-items: center;
+      align-items: flex-start;
     }
   }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>NDR XML File Validator</h1>
-  <h3>Upload individual <code>.xml</code> files conforming to the Nigerian National Data Repository (NDR) validation rules.<h3>
-</header>
+<div class="container">
+  <header>
+    <h1>NDR XML File Validator</h1>
+    <h3>
+      Upload individual <code>.xml</code> files or <code>.zip</code> archives conforming to the Nigerian National Data Repository (NDR) validation rules.
+    </h3>
+  </header>
 
-<form method="post" enctype="multipart/form-data" novalidate>
-  <input type="file" name="file" accept=".xml" required aria-label="Upload XML file" multiple/>
-  <button type="submit">Validate</button>
-</form>
+  <main class="card">
+    <form method="post" enctype="multipart/form-data" novalidate>
+      <div class="file-dropzone">
+        <input type="file" name="file" id="fileInput" accept=".xml,.zip" required aria-label="Upload XML or ZIP files" multiple/>
+        <div class="dropzone-text">
+          <span>📁 Drag & drop your files here or <strong>browse computer</strong></span>
+          <p style="margin: 0.5rem 0 0 0; font-size: 0.85rem; opacity: 0.8;">Accepts .XML files and compressed .ZIP archives</p>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit">Validate Metadata</button>
+      </div>
+    </form>
+  </main>
 
-{% if results %}
-    <h2>Validation Results</h2>
-    {% if results %}
-    <div style="margin:15px 0;">
-        <button type="button" onclick="exportTableToCSV()">
+  {% if error_message %}
+    <div class="error-message">⚠️ {{ error_message }}</div>
+  {% endif %}
+
+  {% if results %}
+    <section class="card">
+      <div class="action-row">
+        <div>
+          <h2 style="margin: 0 0 0.5rem 0; font-size: 1.5rem; font-weight: 700;">Validation Results</h2>
+          <div class="processed-badge">
+            📊 Total Files Processed: <strong>{{ results|length }}</strong>
+          </div>
+        </div>
+        <div>
+          <button type="button" class="btn-secondary" onclick="exportTableToCSV()">
             📥 Export Results to CSV
-        </button>
-    </div>
-    {% endif %}
-    <table id="resultsTable" border="1" cellpadding="5" cellspacing="0">
-        <thead>
+          </button>
+        </div>
+      </div>
+      
+      <div class="table-responsive">
+        <table id="resultsTable">
+          <thead>
             <tr>
-                <th>Facility Name</th>
-                <th>Hospital Number</th>
-                <th>unique ID</th>
-                <th>Report Date</th>
-                <th>Other Patient's Info</th>
-                <th>ART Start Date</th>
-                <th>Validation Issues</th>
+              <th>Facility Details</th>
+              <th>Hospital Number</th>
+              <th>Unique ID</th>
+              <th>Report Date</th>
+              <th>Patient Matrix</th>
+              <th>ART Start Date</th>
+              <th>Validation & Cohort Status</th>
             </tr>
-        </thead>
-        <tbody>
+          </thead>
+          <tbody>
             {% for result in results %}
-                <tr>
-                    <td>{{ result.patient.facility_name or "[MISSING]" }}</td>
-                    <td>{{ result.patient.hn or "[MISSING]" }}</td>
-                    <td>{{ result.patient.id or "[MISSING]" }}</td>
-                    <td>{{ result.patient.report_date or "[MISSING]" }}</td>
-                    <td>
-                      DOB: {{ result.patient.dob or "[MISSING]" }}, 
-                      Sex: {{ result.patient.sex or "[MISSING]" }}, 
-                      Facility ID: {{ result.patient.facility_id or "[MISSING]" }}, 
-                      TB ID: {{ result.patient.tb_id or "[MISSING]" }}, 
-                      Age: {{ result.patient.age or "[MISSING]" }},  
-                      Address Code: {{ result.patient.addresscode or "[MISSING]" }}, 
-                      LGA Code: {{ result.patient.lgacode or "[MISSING]" }}, 
-                      State Code: {{ result.patient.statecode or "[MISSING]" }}, 
-                      Country Code: {{ result.patient.countrycode or "[MISSING]" }}, 
-                      Height at ART Start: {{ result.patient.height_at_art_start or "[MISSING]" }}
-                    </td>
-
-                    <td>{{ result.art_start }}</td>
-                    <td>
-                        {% if result.issues %}
-                            <ul>
-                            {% for issue in result.issues %}
-                                <li>{{ issue }}</li>
-                            {% endfor %}
-                            </ul>
-                        {% else %}
-                            No issues found
-                        {% endif %}
-                    </td>
-                </tr>
+              <tr>
+                <td>
+                  <strong>{{ result.patient.facility_name or "" }}</strong>
+                  {% if not result.patient.facility_name %}<span class="badge-missing">[MISSING]</span>{% endif %}
+                </td>
+                <td>{{ result.patient.hn or "" }}{% if not result.patient.hn %}<span class="badge-missing">[MISSING]</span>{% endif %}</td>
+                <td>{{ result.patient.id or "" }}{% if not result.patient.id %}<span class="badge-missing">[MISSING]</span>{% endif %}</td>
+                <td>{{ result.patient.report_date or "" }}{% if not result.patient.report_date %}<span class="badge-missing">[MISSING]</span>{% endif %}</td>
+                <td>
+                  <div class="patient-matrix-simple">
+                    <span class="matrix-tag">DOB:</span> {{ result.patient.dob or "[MISSING]" }}, 
+                    <span class="matrix-tag">Sex:</span> {{ result.patient.sex or "[MISSING]" }}, 
+                    <span class="matrix-tag">Fac ID:</span> {{ result.patient.facility_id or "[MISSING]" }}, 
+                    <span class="matrix-tag">TB ID:</span> {{ result.patient.tb_id or "[MISSING]" }}, 
+                    <span class="matrix-tag">Age:</span> {{ result.patient.age or "[MISSING]" }}, 
+                    <span class="matrix-tag">Adr Cde:</span> {{ result.patient.addresscode or "[MISSING]" }}, 
+                    <span class="matrix-tag">LGA Cde:</span> {{ result.patient.lgacode or "[MISSING]" }}, 
+                    <span class="matrix-tag">St Cde:</span> {{ result.patient.statecode or "[MISSING]" }}, 
+                    <span class="matrix-tag">Cnt Cde:</span> {{ result.patient.countrycode or "[MISSING]" }}, 
+                    <span class="matrix-tag">Hgt (ART):</span> {{ result.patient.height_at_art_start or "[MISSING]" }}
+                  </div>
+                </td>
+                <td>
+                  {% if result.art_start %}{{ result.art_start }}{% else %}<span class="badge-none">[NONE]</span>{% endif %}
+                </td>
+                <td>
+                  <div class="issue-container">
+                    {% if result.issues %}
+                      <ul class="issue-list">
+                      {% for issue in result.issues %}
+                        <span class="raw-issue-log" style="display:none;">{{ issue }}</span>
+                      {% endfor %}
+                      </ul>
+                    {% else %}
+                      <span class="status-clean">✨ No validation errors found</span>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
             {% endfor %}
-        </tbody>
-    </table>
-{% endif %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
 
+  <button class="toggle-rules" aria-expanded="false" aria-controls="critical-rules" onclick="toggleRules()">Show Critical Rules</button>
 
-<br>
-
-<button class="toggle-rules" aria-expanded="false" aria-controls="critical-rules" onclick="toggleRules()">Show Critical Rules</button>
-
-<section id="critical-rules" aria-live="polite" role="region" aria-label="Critical Validation Rules">
-  <h2>Critical Rules</h2>
-  <ul>
-    <li>Upload <code>.xml</code> files (not zipped) that is well-formed and conforms to the NDR schema.</li>
-    <li>Every <code>HIVEncounter</code> requires <em>VisitDate</em> and <em>ARVDrugRegimen/Code</em>.</li>
-    <li><em>ARTStartDate</em> must not be later than any encounter date.</li>
-    <li>
-      <em>TBStatus</em> interpretation (per NDR):
-      <ul>
-        <li>0 = No signs/symptoms → IPT (INH) must be recorded on or after that date.</li>
-        <li>1 = Presumptive TB → No IPT expected (patient under investigation).</li>
-        <li>2 / 3 = Confirmed TB (Pulmonary / Extra-pulmonary) → TB treatment — IPT must NOT be given.</li>
-        <li>4 = On TB treatment → IPT must NOT be given.</li>
-      </ul>
-    </li>
-    <li>Each <code>LaboratoryReport</code> needs <em>LaboratoryTestIdentifier</em> and <em>CollectionDate</em>.</li>
-    <li>If <em>PrescribedRegimenDuration</em> &gt; 30 days, <em>MultiMonthDispensing</em> (MMD) is mandatory.</li>
-    <li>ARV codes in encounters must match the prescribed ART regimen for the same visit date.</li>
-    <li>Reported patient age must agree with <em>DateOfBirth</em> and <em>DateOfLastReport</em> (±1 year).</li>
-  </ul>
-</section>
+  <section id="critical-rules" aria-live="polite" role="region" aria-label="Critical Validation Rules">
+    <h2>Critical Processing Schema & Rules</h2>
+    <ul>
+      <li>Upload <code>.xml</code> files or <code>.zip</code> archives that are well-formed and conform to the NDR schema.</li>
+      <li>Every <code>HIVEncounter</code> requires <em>VisitDate</em> and <em>ARVDrugRegimen/Code</em>.</li>
+      <li><em>ARTStartDate</em> must not be later than any encounter date.</li>
+      <li>
+        <em>TBStatus</em> interpretation (per NDR):
+        <ul>
+          <li>0 = No signs/symptoms → IPT (INH) must be recorded on or after that date.</li>
+          <li>1 = Presumptive TB → No IPT expected (patient under investigation).</li>
+          <li>2 / 3 = Confirmed TB (Pulmonary / Extra-pulmonary) → TB treatment — IPT must NOT be given.</li>
+          <li>4 = On TB treatment → IPT must NOT be given.</li>
+        </ul>
+      </li>
+      <li>Each <code>LaboratoryReport</code> needs <em>LaboratoryTestIdentifier</em> and <em>CollectionDate</em>.</li>
+      <li>If <em>PrescribedRegimenDuration</em> &gt; 30 days, <em>MultiMonthDispensing</em> (MMD) is mandatory.</li>
+      <li>ARV codes in encounters must match the prescribed ART regimen for the same visit date.</li>
+      <li>Reported patient age must agree with <em>DateOfBirth</em> and <em>DateOfLastReport</em> (±1 year).</li>
+    </ul>
+  </section>
+</div>
 
 <script>
   function toggleRules() {
@@ -286,17 +553,105 @@
     btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
   }
 
-  // Show critical rules by default on page load
+  // Robust Visual Parsing Engine for Variable Clinical Logs
+  function processClinicalLogs() {
+    const containers = document.querySelectorAll('.issue-container');
+    
+    containers.forEach(container => {
+      const logs = container.querySelectorAll('.raw-issue-log');
+      const standardList = container.querySelector('.issue-list');
+      
+      logs.forEach(log => {
+        const text = log.textContent.trim();
+        
+        if (text.includes("Patient is ACTIVE") || text.includes("Patient is INACTIVE")) {
+          const isActive = text.includes("Patient is ACTIVE");
+          
+          // Uniform cleaning of prefixes
+          let cleanText = text.replace(/[✅❌•]/g, '').trim();
+          
+          // Split elements cleanly by structural list dots
+          const variables = cleanText.split("•");
+          
+          const card = document.createElement('div');
+          card.className = `clinical-card ${isActive ? 'active-status' : 'inactive-status'}`;
+          
+          let titleText = isActive ? "🟢 Patient Cohort: ACTIVE" : "🔴 Patient Cohort: INACTIVE";
+          
+          let metricsHTML = `<div class="clinical-card-metrics">`;
+          let extraContent = [];
+
+          variables.forEach((v, index) => {
+            let item = v.trim();
+            if (!item) return;
+
+            // First item contains status message context itself
+            if (index === 0) {
+              // If there's extra text immediately attached before the first bullet point
+              let baseline = item.replace(/Patient is (ACTIVE|INACTIVE)\.?/gi, '').trim();
+              if (baseline) extraContent.push(baseline);
+              return;
+            }
+
+            let pair = item.split(":");
+            if (pair.length >= 2) {
+              metricsHTML += `<div><strong>${pair[0].trim()}:</strong> ${pair.slice(1).join(':').trim()}</div>`;
+            } else {
+              // Direct non-key value trailing context or comments
+              extraContent.push(item);
+            }
+          });
+          
+          metricsHTML += `</div>`;
+
+          // If there are residual comments or trailing content strings, print them cleanly at the base
+          let appendiceHTML = "";
+          if (extraContent.length > 0) {
+            appendiceHTML = `<div class="clinical-card-appendices">ℹ️ ${extraContent.join(' | ')}</div>`;
+          }
+
+          card.innerHTML = `
+            <div class="clinical-card-title">${titleText}</div>
+            ${metricsHTML}
+            ${appendiceHTML}
+          `;
+          
+          container.insertBefore(card, container.firstChild);
+        } else {
+          if (standardList) {
+            const li = document.createElement('li');
+            li.textContent = text;
+            standardList.appendChild(li);
+          }
+        }
+      });
+
+      // Housekeeping: Clear empty bullet elements if everything got parsed into cards
+      if (standardList && standardList.children.length === 0) {
+        standardList.remove();
+      }
+    });
+  }
+
   window.addEventListener('DOMContentLoaded', () => {
     const rules = document.getElementById('critical-rules');
     const btn = document.querySelector('.toggle-rules');
     rules.style.display = 'block';
     btn.textContent = 'Hide Critical Rules';
     btn.setAttribute('aria-expanded', 'true');
+
+    processClinicalLogs();
+
+    const fileInput = document.getElementById('fileInput');
+    fileInput.addEventListener('change', () => {
+      const textContainer = document.querySelector('.dropzone-text span');
+      if(fileInput.files.length > 0) {
+        textContainer.innerHTML = `⏳ Selected <strong>${fileInput.files.length} file(s)</strong> ready for upload`;
+      }
+    });
   });
 
   function exportTableToCSV() {
-
       const table = document.getElementById("resultsTable");
 
       if (!table) {
@@ -306,33 +661,26 @@
 
       let csv = [];
 
-      // Loop through every row
       for (let row of table.rows) {
-
           let cols = [];
 
           for (let cell of row.cells) {
-
               let text = "";
 
-              // Validation issues column contains <ul>
               const list = cell.querySelectorAll("li");
+              const clinicalCards = cell.querySelectorAll(".clinical-card");
 
-              if (list.length > 0) {
-
+              if (clinicalCards.length > 0) {
+                  text = Array.from(clinicalCards).map(c => c.innerText.replace(/\n/g, " | ")).join(" || ");
+              } else if (list.length > 0) {
                   text = Array.from(list)
                       .map(li => li.innerText.replace(/\n/g, " "))
                       .join(" | ");
-
               } else {
-
                   text = cell.innerText.replace(/\n/g, " ");
-
               }
 
-              // Escape quotes
               text = text.replace(/"/g, '""');
-
               cols.push(`"${text}"`);
           }
 
@@ -340,20 +688,15 @@
       }
 
       const csvContent = csv.join("\n");
-
       const BOM = "\uFEFF";
 
       const blob = new Blob(
           [BOM + csvContent],
-          {
-              type: "text/csv;charset=utf-8;"
-          }
+          { type: "text/csv;charset=utf-8;" }
       );
 
       const url = URL.createObjectURL(blob);
-
       const link = document.createElement("a");
-
       const today = new Date();
 
       const filename =
@@ -369,11 +712,8 @@
       link.download = filename;
 
       document.body.appendChild(link);
-
       link.click();
-
       document.body.removeChild(link);
-
       URL.revokeObjectURL(url);
   }
 </script>
